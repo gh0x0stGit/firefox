@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LNA Instant Spike v61.0</title>
+    <style>
+        :root { --primary: #00ff41; --error: #ff0055; --bg: #050505; --surface: #121212; }
+        body { background: var(--bg); color: var(--primary); font-family: 'Courier New', monospace; padding: 20px; text-align: center; }
+        .dashboard { max-width: 600px; margin: auto; border: 1px solid #333; background: var(--surface); border-radius: 12px; padding: 30px; }
+        .btn { background: var(--primary); color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; margin-top: 20px; text-transform: uppercase; }
+        #usage { font-size: 3rem; color: #fff; margin: 20px 0; text-shadow: 0 0 10px var(--primary); }
+        input { background: #000; color: #0f0; border: 1px solid #333; padding: 15px; width: 80%; font-size: 1.2rem; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div class="dashboard">
+    <h2>🚀 INSTANT RAM SPIKE</h2>
+    <p style="font-size:0.8rem; color:#888;">Burst Allocation: No Delays, No Countdowns</p>
+    
+    <div id="usage">0 MB</div>
+
+    <input type="number" id="targetMb" value="2000" placeholder="Enter Target MB">
+
+    <button class="btn" onclick="executeBurstLeak()">EXECUTE INSTANT SPIKE</button>
+    <button class="btn" style="background:var(--error); color:#fff;" onclick="location.reload()">KILL & PURGE</button>
+
+    <div id="status" style="margin-top:20px; font-size:0.8rem;">Ready for burst...</div>
+</div>
+
+<script>
+    let blobStore = [];
+    let allocated = 0;
+
+    function executeBurstLeak() {
+        const target = parseInt(document.getElementById('targetMb').value);
+        const status = document.getElementById('status');
+        const usageDisplay = document.getElementById('usage');
+        
+        status.innerHTML = "<span style='color:yellow;'>BURST IN PROGRESS...</span>";
+        
+        // We use a tight while loop for instant allocation
+        // Chunk size 100MB to hit the target faster
+        const chunkSize = 100 * 1024 * 1024; 
+
+        try {
+            while (allocated < target) {
+                const data = new Uint8Array(chunkSize);
+                data.fill(255); // Fill with data to force allocation
+
+                const blob = new Blob([data], {type: 'application/octet-stream'});
+                const url = URL.createObjectURL(blob); // Leak it into memory
+                
+                blobStore.push(url);
+                allocated += 100;
+                
+                // Update UI (Note: Browser might freeze momentarily during burst)
+                usageDisplay.innerText = allocated + " MB";
+            }
+            status.innerHTML = "<span style='color:var(--primary);'>SPIKE COMPLETE</span>";
+        } catch (e) {
+            status.innerHTML = "<span style='color:var(--error);'>OS/BROWSER KILLED ALLOCATION</span>";
+        }
+    }
+</script>
+</body>
+</html>
