@@ -64,7 +64,7 @@
             // 2. Long Timeouts (>5000ms) = Resource MISSING.
             // 3. Middle range (2000ms from v34/35) = Security Abort / Noise.
             
-            let isFound = (time < 100); 
+            let isFound = (time < 200); 
             let confidence = (time < 50 || time > 5000) ? "High (Verified)" : "Medium (Inferred)";
 
             const card = document.createElement('div');
