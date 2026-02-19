@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LNA Pro Precision Auditor</title>
+    <style>
+        :root { --primary: #00ff41; --error: #ff0055; --bg: #0a0a0a; --card-bg: #111; }
+        body { background: var(--bg); color: var(--primary); font-family: 'Segoe UI', monospace; padding: 30px; }
+        .dashboard { max-width: 850px; margin: auto; border: 1px solid #333; border-radius: 8px; background: var(--card-bg); overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.7); }
+        .header { background: #000; padding: 20px; border-bottom: 2px solid #333; text-align: center; }
+        .audit-btn { background: var(--primary); color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; cursor: pointer; font-size: 1.2rem; text-transform: uppercase; transition: 0.3s; }
+        .audit-btn:hover { background: #00cc33; letter-spacing: 1px; }
+        .results { padding: 20px; }
+        .card { background: #1a1a1a; margin-bottom: 12px; padding: 15px; border-left: 6px solid #444; display: flex; justify-content: space-between; align-items: center; border-radius: 4px; }
+        .card.found { border-left-color: var(--primary); background: rgba(0, 255, 65, 0.05); }
+        .card.missing { border-left-color: var(--error); background: rgba(255, 0, 85, 0.05); }
+        .path-text { font-weight: bold; font-size: 1.1rem; color: #fff; }
+        .meta-text { font-size: 0.8rem; color: #888; margin-top: 5px; }
+        .confidence-tag { font-size: 0.75rem; padding: 3px 8px; border-radius: 3px; font-weight: bold; }
+        .high-conf { background: var(--primary); color: #000; }
+        .low-conf { background: #ffeb3b; color: #000; }
+    </style>
+</head>
+<body>
+
+<div class="dashboard">
+    <div class="header">
+        <h2 style="margin:0;">LNA PRECISION AUDITOR v36.0</h2>
+        <p style="font-size:0.8rem; color:#666; margin-top:5px;">Syncing Race-Timing with Local Network Stack</p>
+    </div>
+    
+    <button class="audit-btn" onclick="executeAudit()">START PRECISION SCAN</button>
+
+    <div class="results" id="display-zone">
+        <div style="text-align:center; padding:50px; color:#555;">Initializing system... Standing by for execution.</div>
+    </div>
+</div>
+
+<script>
+    const paths = ["/favicon.ico", "/dashboard/phpinfo.php", "/phpmyadmin/index.php", "/icons/apache_pb.gif"];
+
+    async function measureTiming(url) {
+        const start = performance.now();
+        try {
+            // Keepalive triggers the full internal fetch cycle
+            await fetch(url, { mode: 'no-cors', cache: 'no-store', keepalive: true });
+        } catch (e) {
+            // Error catch handles the NS_BINDING_ABORTED timing
+        }
+        return performance.now() - start;
+    }
+
+    async function executeAudit() {
+        const display = document.getElementById('display-zone');
+        display.innerHTML = "";
+        const port = 4444;
+
+        for (let p of paths) {
+            const url = `http://127.0.0.1:${port}${p}`;
+            const time = await measureTiming(url);
+            
+            // THE REFINED LOGIC:
+            // 1. Instant Blocks/Responses (~10ms - 100ms) = Resource FOUND.
+            // 2. Long Timeouts (>5000ms) = Resource MISSING.
+            // 3. Middle range (2000ms from v34/35) = Security Abort / Noise.
+            
+            let isFound = (time < 500); 
+            let confidence = (time < 50 || time > 5000) ? "High (Verified)" : "Medium (Inferred)";
+
+            const card = document.createElement('div');
+            card.className = `card ${isFound ? 'found' : 'missing'}`;
+            card.innerHTML = `
+                <div style="flex-grow:1;">
+                    <div class="path-text">${p}</div>
+                    <div class="meta-text">Timing: ${time.toFixed(2)}ms | Stack Response: ${isFound ? 'Instant' : 'Timeout'}</div>
+                </div>
+                <div style="text-align:right;">
+                    <div class="confidence-tag ${confidence.includes('High') ? 'high-conf' : 'low-conf'}">${confidence}</div>
+                    <div style="margin-top:8px; font-weight:bold; color:${isFound ? 'var(--primary)' : 'var(--error)'}">
+                        ${isFound ? 'VERIFIED FOUND' : 'MISSING'}
+                    </div>
+                </div>
+            `;
+            display.appendChild(card);
+        }
+    }
+</script>
+</body>
+</html>
