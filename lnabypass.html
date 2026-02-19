@@ -23,38 +23,18 @@
 </head>
 <body>
 
-<div class="dashboard">
-    <div class="header">
-        <h2 style="margin:0;">LNA PRECISION AUDITOR v36.0</h2>
-        <p style="font-size:0.8rem; color:#666; margin-top:5px;">Syncing Race-Timing with Local Network Stack</p>
-    </div>
-    
-    <button class="audit-btn" onclick="executeAudit()">START PRECISION SCAN</button>
-
-    <div class="results" id="display-zone">
-        <div style="text-align:center; padding:50px; color:#555;">Initializing system... Standing by for execution.</div>
-    </div>
-</div>
-
 <script>
     const paths = ["/favicon.ico", "/dashboard/phpinfo.php", "/phpmyadmin/index.php", "/icons/apache_pb.gif"];
 
-    function measureImageTiming(url) {
-        return new Promise((resolve) => {
-            const img = new Image();
-            const start = performance.now();
-            
-            // Jab port open hota hai, browser header read karne ki koshish karta hai
-            img.onload = () => resolve(performance.now() - start);
-            
-            // Jab port band hota hai (Refused), onerror turant fire hota hai
-            img.onerror = () => resolve(performance.now() - start);
-            
-            img.src = url + "?t=" + Math.random(); // Cache bypass
-            
-            // 1.5 second timeout agar kuch bhi response na mile
-            setTimeout(() => resolve(performance.now() - start), 1500);
-        });
+    async function measureTiming(url) {
+        const start = performance.now();
+        try {
+            // mode: 'no-cors' zaroori hai localhost bypass ke liye
+            await fetch(url, { mode: 'no-cors', cache: 'no-store' });
+        } catch (e) {
+            // Connection Refused ya Block yahan catch hoga
+        }
+        return performance.now() - start;
     }
 
     async function executeAudit() {
@@ -64,26 +44,23 @@
 
         for (let p of paths) {
             const url = `http://127.0.0.1:${port}${p}`;
-            const time = await measureImageTiming(url);
+            const time = await measureTiming(url);
             
-            /* UPDATED LOGIC:
-               1. Connection Refused: Image error < 50ms mein trigger hota hai.
-               2. Connection Open (but 404): Header parsing mein 100ms-500ms lagte hain.
-               3. Service Active (Found): Timing usually stable rehti hai.
+            /* AAPKA DIYA HUA LOGIC:
+               1. 0ms - 5ms: Browser Block / Immediate Fail -> NOT FOUND
+               2. 5ms - 200ms: Active Response Range -> VERIFIED FOUND
+               3. > 200ms: Timeout / Slow Connection Refused -> NOT FOUND
             */
-
-            // Localhost par active service 100ms se zyada hi leti hai image context mein
-            let isFound = (time > 100 && time < 1400); 
             
+            let isFound = (time > 5 && time <= 200); 
             let statusText = "";
-            if (time < 80) {
-                statusText = "PORT CLOSED (REFUSED)";
-                isFound = false;
-            } else if (time >= 1500) {
-                statusText = "TIMEOUT / DROPPED";
-                isFound = false;
+
+            if (time <= 5) {
+                statusText = "INSTANT BLOCK (NOT FOUND)";
+            } else if (isFound) {
+                statusText = "VALID RESPONSE (FOUND)";
             } else {
-                statusText = "RESPONSE RECEIVED";
+                statusText = "SLOW REFUSAL (NOT FOUND)";
             }
 
             const card = document.createElement('div');
@@ -91,10 +68,12 @@
             card.innerHTML = `
                 <div style="flex-grow:1;">
                     <div class="path-text">${p}</div>
-                    <div class="meta-text">Timing: ${time.toFixed(2)}ms | Network: ${statusText}</div>
+                    <div class="meta-text">Timing: ${time.toFixed(2)}ms | Status: ${statusText}</div>
                 </div>
                 <div style="text-align:right;">
-                    <div class="confidence-tag ${isFound ? 'high-conf' : 'low-conf'}">${isFound ? 'High (Verified)' : 'Refined'}</div>
+                    <div class="confidence-tag ${isFound ? 'high-conf' : 'low-conf'}">
+                        ${isFound ? 'High (Verified)' : 'Rejected'}
+                    </div>
                     <div style="margin-top:8px; font-weight:bold; color:${isFound ? 'var(--primary)' : 'var(--error)'}">
                         ${isFound ? 'VERIFIED FOUND' : 'NOT FOUND'}
                     </div>
