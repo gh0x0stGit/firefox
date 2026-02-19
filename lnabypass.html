@@ -42,10 +42,10 @@
     async function measureTiming(url) {
         const start = performance.now();
         try {
-            // Keepalive triggers the full internal fetch cycle
-            await fetch(url, { mode: 'no-cors', cache: 'no-store', keepalive: true });
+            // Hum 'no-cors' use kar rahe hain, lekin browser PNA block karega
+            await fetch(url, { mode: 'no-cors', cache: 'no-store', priority: 'high' });
         } catch (e) {
-            // Error catch handles the NS_BINDING_ABORTED timing
+            // Block hone par bhi execution yahan aayega
         }
         return performance.now() - start;
     }
@@ -53,31 +53,40 @@
     async function executeAudit() {
         const display = document.getElementById('display-zone');
         display.innerHTML = "";
-        const port = 4444;
+        const port = 4444; // Ensure this is your target port
 
         for (let p of paths) {
             const url = `http://127.0.0.1:${port}${p}`;
             const time = await measureTiming(url);
             
-            // THE REFINED LOGIC:
-            // 1. Instant Blocks/Responses (~10ms - 100ms) = Resource FOUND.
-            // 2. Long Timeouts (>5000ms) = Resource MISSING.
-            // 3. Middle range (2000ms from v34/35) = Security Abort / Noise.
+            /* FIXED LOGIC:
+               1. Agar timing < 5ms hai, toh iska matlab browser ne network tak request 
+                  pohunchne se pehle hi "Permission Denied" de diya (False Positive).
+               2. Agar timing 5ms - 100ms ke beech hai aur error CORS hai, 
+                  toh iska matlab server ne response diya par browser ne hide kiya (Likely Found).
+               3. Agar timing > 1000ms hai, toh woh Connection Refused ya Timeout hai (Missing).
+            */
             
-            let isFound = (time < 200); 
-            let confidence = (time < 50 || time > 5000) ? "High (Verified)" : "Medium (Inferred)";
+            let isFound = (time > 5 && time < 500); 
+            let confidence = (time > 10 && time < 100) ? "High (Verified)" : "Low (System Noise)";
+
+            if (time < 5) {
+                // Agar 5ms se kam hai toh browser ne check hi nahi kiya
+                isFound = false;
+                confidence = "Blocked by Browser";
+            }
 
             const card = document.createElement('div');
             card.className = `card ${isFound ? 'found' : 'missing'}`;
             card.innerHTML = `
                 <div style="flex-grow:1;">
                     <div class="path-text">${p}</div>
-                    <div class="meta-text">Timing: ${time.toFixed(2)}ms | Stack Response: ${isFound ? 'Instant' : 'Timeout'}</div>
+                    <div class="meta-text">Timing: ${time.toFixed(2)}ms | Network State: ${time < 5 ? 'PNA Blocked' : 'Analyzed'}</div>
                 </div>
                 <div style="text-align:right;">
-                    <div class="confidence-tag ${confidence.includes('High') ? 'high-conf' : 'low-conf'}">${confidence}</div>
+                    <div class="confidence-tag ${isFound ? 'high-conf' : 'low-conf'}">${confidence}</div>
                     <div style="margin-top:8px; font-weight:bold; color:${isFound ? 'var(--primary)' : 'var(--error)'}">
-                        ${isFound ? 'VERIFIED FOUND' : 'MISSING'}
+                        ${isFound ? 'VERIFIED FOUND' : 'NOT ACCESSIBLE / MISSING'}
                     </div>
                 </div>
             `;
