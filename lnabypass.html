@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>LNA Pro Precision Auditor</title>
+    <title>LNA Pro Precision Auditor - Strict Mode</title>
     <style>
         :root { --primary: #00ff41; --error: #ff0055; --bg: #0a0a0a; --card-bg: #111; }
         body { background: var(--bg); color: var(--primary); font-family: 'Segoe UI', monospace; padding: 30px; }
@@ -23,16 +23,29 @@
 </head>
 <body>
 
+<div class="dashboard">
+    <div class="header">
+        <h2 style="margin:0;">LNA PRECISION AUDITOR v37.0</h2>
+        <p style="font-size:0.8rem; color:#666; margin-top:5px;">Strict Window: 5ms - 200ms Detection</p>
+    </div>
+    
+    <button class="audit-btn" onclick="executeAudit()">START STRICT SCAN</button>
+
+    <div class="results" id="display-zone">
+        <div style="text-align:center; padding:50px; color:#555;">Ready for precision analysis...</div>
+    </div>
+</div>
+
 <script>
     const paths = ["/favicon.ico", "/dashboard/phpinfo.php", "/phpmyadmin/index.php", "/icons/apache_pb.gif"];
 
     async function measureTiming(url) {
         const start = performance.now();
         try {
-            // mode: 'no-cors' zaroori hai localhost bypass ke liye
+            // mode: 'no-cors' use kar rahe hain taaki localhost requests block na ho
             await fetch(url, { mode: 'no-cors', cache: 'no-store' });
         } catch (e) {
-            // Connection Refused ya Block yahan catch hoga
+            // Errors (Refused/Blocked) yahan handle hote hain timing ke liye
         }
         return performance.now() - start;
     }
@@ -40,27 +53,27 @@
     async function executeAudit() {
         const display = document.getElementById('display-zone');
         display.innerHTML = "";
-        const port = 4444; 
+        const port = 4444; // Aapka target port
 
         for (let p of paths) {
             const url = `http://127.0.0.1:${port}${p}`;
             const time = await measureTiming(url);
             
-            /* AAPKA DIYA HUA LOGIC:
-               1. 0ms - 5ms: Browser Block / Immediate Fail -> NOT FOUND
-               2. 5ms - 200ms: Active Response Range -> VERIFIED FOUND
-               3. > 200ms: Timeout / Slow Connection Refused -> NOT FOUND
+            /* AAPKA STRICT LOGIC:
+               1. time <= 5: Browser Block / Security Cancel -> NOT FOUND
+               2. time > 5 AND time <= 200: Valid Service Response -> VERIFIED FOUND
+               3. time > 200: Timeout / Slow Refusal -> NOT FOUND
             */
             
             let isFound = (time > 5 && time <= 200); 
             let statusText = "";
 
             if (time <= 5) {
-                statusText = "INSTANT BLOCK (NOT FOUND)";
+                statusText = "Security Block / Instant Fail";
             } else if (isFound) {
-                statusText = "VALID RESPONSE (FOUND)";
+                statusText = "Service Active (Valid Window)";
             } else {
-                statusText = "SLOW REFUSAL (NOT FOUND)";
+                statusText = "Response Too Slow / Port Closed";
             }
 
             const card = document.createElement('div');
@@ -68,14 +81,14 @@
             card.innerHTML = `
                 <div style="flex-grow:1;">
                     <div class="path-text">${p}</div>
-                    <div class="meta-text">Timing: ${time.toFixed(2)}ms | Status: ${statusText}</div>
+                    <div class="meta-text">Timing: ${time.toFixed(2)}ms | Network: ${statusText}</div>
                 </div>
                 <div style="text-align:right;">
                     <div class="confidence-tag ${isFound ? 'high-conf' : 'low-conf'}">
-                        ${isFound ? 'High (Verified)' : 'Rejected'}
+                        ${isFound ? 'VERIFIED' : 'REJECTED'}
                     </div>
                     <div style="margin-top:8px; font-weight:bold; color:${isFound ? 'var(--primary)' : 'var(--error)'}">
-                        ${isFound ? 'VERIFIED FOUND' : 'NOT FOUND'}
+                        ${isFound ? 'FOUND' : 'NOT FOUND'}
                     </div>
                 </div>
             `;
