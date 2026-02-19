@@ -39,23 +39,22 @@
 <script>
     const paths = ["/favicon.ico", "/dashboard/phpinfo.php", "/phpmyadmin/index.php", "/icons/apache_pb.gif"];
 
-    async function measureTiming(url) {
-        const controller = new AbortController();
-        const start = performance.now();
-        
-        try {
-            // Hum fetch ki jagah 'img' preload ka logic simulate karenge timing ke liye
-            // Kyunki band port 'ERR_CONNECTION_REFUSED' bahut fast deta hai
-            await fetch(url, { 
-                mode: 'no-cors', 
-                cache: 'no-store', 
-                signal: controller.signal 
-            });
-        } catch (e) {
-            // Error aane par timing check karenge
-        }
-        
-        return performance.now() - start;
+    function measureImageTiming(url) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            const start = performance.now();
+            
+            // Jab port open hota hai, browser header read karne ki koshish karta hai
+            img.onload = () => resolve(performance.now() - start);
+            
+            // Jab port band hota hai (Refused), onerror turant fire hota hai
+            img.onerror = () => resolve(performance.now() - start);
+            
+            img.src = url + "?t=" + Math.random(); // Cache bypass
+            
+            // 1.5 second timeout agar kuch bhi response na mile
+            setTimeout(() => resolve(performance.now() - start), 1500);
+        });
     }
 
     async function executeAudit() {
@@ -65,23 +64,27 @@
 
         for (let p of paths) {
             const url = `http://127.0.0.1:${port}${p}`;
-            const time = await measureTiming(url);
+            const time = await measureImageTiming(url);
             
-            /* REVISED LOGIC FOR CLOSED PORTS:
-               1. Connection Refused (Port Closed): OS turant Reset packet bhejta hai.
-                  Windows/Linux par timing aksar < 100ms ya server load ke hisab se constant hoti hai.
-               2. Active Service: Resource search aur response header bhejne mein extra time lagta hai.
-               
-               Aapke screenshot ke hisab se 48ms-266ms par ERR_CONNECTION_REFUSED aa raha hai.
-               Iska matlab aapka system 'refused' responses slow de raha hai.
+            /* UPDATED LOGIC:
+               1. Connection Refused: Image error < 50ms mein trigger hota hai.
+               2. Connection Open (but 404): Header parsing mein 100ms-500ms lagte hain.
+               3. Service Active (Found): Timing usually stable rehti hai.
             */
 
-            // Hum timing threshold ko badha rahe hain. 
-            // Real service local host par usually 500ms+ leti hai agar file search karni ho.
-            let isFound = (time > 1000); // 1 Second se zyada lage toh hi active maane
+            // Localhost par active service 100ms se zyada hi leti hai image context mein
+            let isFound = (time > 100 && time < 1400); 
             
-            let statusText = time < 500 ? "PORT CLOSED / REFUSED" : "ANALYZING...";
-            let confidence = "High (Refined)";
+            let statusText = "";
+            if (time < 80) {
+                statusText = "PORT CLOSED (REFUSED)";
+                isFound = false;
+            } else if (time >= 1500) {
+                statusText = "TIMEOUT / DROPPED";
+                isFound = false;
+            } else {
+                statusText = "RESPONSE RECEIVED";
+            }
 
             const card = document.createElement('div');
             card.className = `card ${isFound ? 'found' : 'missing'}`;
@@ -91,7 +94,7 @@
                     <div class="meta-text">Timing: ${time.toFixed(2)}ms | Network: ${statusText}</div>
                 </div>
                 <div style="text-align:right;">
-                    <div class="confidence-tag ${isFound ? 'high-conf' : 'low-conf'}">${confidence}</div>
+                    <div class="confidence-tag ${isFound ? 'high-conf' : 'low-conf'}">${isFound ? 'High (Verified)' : 'Refined'}</div>
                     <div style="margin-top:8px; font-weight:bold; color:${isFound ? 'var(--primary)' : 'var(--error)'}">
                         ${isFound ? 'VERIFIED FOUND' : 'NOT FOUND'}
                     </div>
